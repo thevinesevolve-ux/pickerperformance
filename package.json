@@ -1,0 +1,12 @@
+{
+  "name": "boxfort-picking-efficiency",
+  "version": "1.0.0",
+  "description": "BoxFort warehouse picking efficiency dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

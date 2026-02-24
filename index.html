@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BoxFort — Picking Efficiency</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #111316;
+    --surface: #191c21;
+    --surface2: #1f2329;
+    --surface3: #262a31;
+    --border: #2a2e36;
+    --border2: #363b44;
+    --text: #f1f2f4;
+    --text2: #9ca3af;
+    --text3: #6b7280;
+    --lime: #d0e847;
+    --lime-dim: rgba(208,232,71,0.12);
+    --lime-mid: rgba(208,232,71,0.25);
+    --green: #4ade80;
+    --green-dim: rgba(74,222,128,0.12);
+    --red: #f87171;
+    --red-dim: rgba(248,113,113,0.12);
+    --amber: #fbbf24;
+    --amber-dim: rgba(251,191,36,0.12);
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── NAV BAR ── */
+  .navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .nav-left {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .logo img {
+    height: 28px;
+    display: block;
+  }
+
+  .nav-divider {
+    width: 1px;
+    height: 24px;
+    background: var(--border2);
+  }
+
+  .nav-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text2);
+  }
+
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .date-range-pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text2);
+    background: var(--surface2);
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+
+  /* ── MAIN LAYOUT ── */
+  .main {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 28px 32px 60px;
+  }
+
+  /* ── UPLOAD STRIP ── */
+  .upload-strip {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+
+  .upload-strip .label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text2);
+    white-space: nowrap;
+  }
+
+  .upload-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border2);
+    background: var(--surface2);
+    color: var(--text2);
+    transition: all 0.15s;
+  }
+
+  .upload-btn:hover { border-color: var(--lime); color: var(--lime); }
+  .upload-btn.loaded { border-color: var(--lime); color: var(--lime); background: var(--lime-dim); }
+  input[type="file"] { display: none; }
+
+  /* ── SUMMARY CARDS ── */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+
+  @media (max-width: 900px) {
+    .summary-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .summary-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--lime);
+    opacity: 0.4;
+  }
+
+  .card .label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text3);
+    margin-bottom: 8px;
+  }
+
+  .card .value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 26px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -1px;
+  }
+
+  .card .sub {
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 4px;
+  }
+
+  .card.accent .value { color: var(--lime); }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 20px;
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 3px;
+    width: fit-content;
+    border: 1px solid var(--border);
+  }
+
+  .tab {
+    padding: 8px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--text3);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    transition: all 0.15s;
+  }
+
+  .tab:hover { color: var(--text2); }
+
+  .tab.active {
+    background: var(--lime);
+    color: var(--bg);
+  }
+
+  /* ── TABLES ── */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .table-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .table-header h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .table-header .count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text3);
+    background: var(--surface2);
+    padding: 3px 10px;
+    border-radius: 4px;
+  }
+
+  .table-scroll { overflow-x: auto; }
+
+  table { width: 100%; border-collapse: collapse; }
+
+  th {
+    text-align: left;
+    padding: 10px 16px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text3);
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    white-space: nowrap;
+    color: var(--text);
+  }
+
+  td.name-cell {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(208,232,71,0.03); }
+
+  /* ── EFFICIENCY VISUALS ── */
+  .eff-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .bar-track {
+    width: 80px;
+    height: 4px;
+    background: var(--surface3);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+
+  .fill-high { background: var(--green); }
+  .fill-mid { background: var(--lime); }
+  .fill-low { background: var(--red); }
+
+  .tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 3px;
+    letter-spacing: 0.5px;
+  }
+
+  .tag-high { background: var(--green-dim); color: var(--green); }
+  .tag-mid { background: var(--lime-dim); color: var(--lime); }
+  .tag-low { background: var(--red-dim); color: var(--red); }
+
+  .iph-value {
+    font-weight: 600;
+    color: var(--text);
+    min-width: 32px;
+    text-align: right;
+  }
+
+  /* Totals row */
+  .totals-row td {
+    background: var(--surface2) !important;
+    font-weight: 600;
+    border-top: 2px solid var(--lime);
+    color: var(--lime);
+  }
+
+  .totals-row td.name-cell { color: var(--lime); }
+
+  .date-cell {
+    color: var(--text2);
+  }
+
+  .day-cell {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    color: var(--text3);
+    font-size: 12px;
+  }
+
+  .rank-cell {
+    color: var(--text3);
+    font-size: 11px;
+  }
+
+  .no-data {
+    color: var(--red);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 11px;
+    font-style: italic;
+  }
+
+  .muted { color: var(--text3); }
+
+  /* ── FOOTER ── */
+  .footer {
+    text-align: center;
+    padding: 40px 32px 20px;
+    font-size: 11px;
+    color: var(--text3);
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="navbar">
+  <div class="nav-left">
+    <div class="logo"><img src="https://boxfortcommerce.com/wp-content/uploads/2023/07/newboxfortlogo.png" alt="BoxFort"></div>
+    <div class="nav-divider"></div>
+    <div class="nav-title">Picking Efficiency</div>
+  </div>
+  <div class="nav-right">
+    <div class="date-range-pill" id="dateRange">—</div>
+  </div>
+</nav>
+
+<div class="main">
+
+  <!-- UPLOAD -->
+  <div class="upload-strip">
+    <div class="label">Load new data:</div>
+    <label class="upload-btn" id="wfhBtn">
+      ⏱ WorkForce Hero
+      <input type="file" id="wfhFile" accept=".csv">
+    </label>
+    <label class="upload-btn" id="pickersBtn">
+      📋 Pickers Report
+      <input type="file" id="pickersFile" accept=".csv">
+    </label>
+  </div>
+
+  <!-- SUMMARY -->
+  <div class="summary-grid" id="summaryCards"></div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" data-view="daily" onclick="switchTab(this)">Daily</button>
+    <button class="tab" data-view="picker" onclick="switchTab(this)">By Picker</button>
+    <button class="tab" data-view="detail" onclick="switchTab(this)">All Entries</button>
+  </div>
+
+  <!-- VIEWS -->
+  <div id="dailyView" class="table-wrap"></div>
+  <div id="pickerView" class="table-wrap" style="display:none;"></div>
+  <div id="detailView" class="table-wrap" style="display:none;"></div>
+
+</div>
+
+<div class="footer">BoxFort Commerce — Internal Tool</div>
+
+<script>
+// ── Pre-loaded data ──
+const PRELOADED = [{"name":"Enrique Lopez","date":"2026-02-17","items":888,"orders":287,"hours":6.8725},{"name":"Nickolas Antoninetti","date":"2026-02-17","items":740,"orders":282,"hours":5.9678},{"name":"Naceem Bright","date":"2026-02-17","items":359,"orders":153,"hours":3.8542},{"name":"Nick Bakin","date":"2026-02-17","items":267,"orders":117,"hours":1.9428},{"name":"Eric Chatman","date":"2026-02-17","items":24,"orders":8,"hours":0.4728},{"name":"Nickolas Antoninetti","date":"2026-02-18","items":757,"orders":368,"hours":6.8442},{"name":"Enrique Lopez","date":"2026-02-18","items":381,"orders":109,"hours":2.6436},{"name":"Naceem Bright","date":"2026-02-18","items":117,"orders":32,"hours":1.3411},{"name":"Eric Chatman","date":"2026-02-18","items":61,"orders":29,"hours":1.2128},{"name":"Nickolas Antoninetti","date":"2026-02-19","items":754,"orders":328,"hours":6.8925},{"name":"Enrique Lopez","date":"2026-02-19","items":424,"orders":117,"hours":2.6867},{"name":"Abigail Martinez","date":"2026-02-19","items":405,"orders":174,"hours":4.01},{"name":"Kelly Hernandez","date":"2026-02-19","items":15,"orders":15,"hours":0.1489},{"name":"Eric Chatman","date":"2026-02-19","items":3,"orders":3,"hours":0.1439},{"name":"Naceem Bright","date":"2026-02-20","items":683,"orders":212,"hours":7.1742},{"name":"Eric Chatman","date":"2026-02-20","items":296,"orders":156,"hours":2.6964},{"name":"Kelly Hernandez","date":"2026-02-20","items":147,"orders":76,"hours":1.6533},{"name":"Despina Southas","date":"2026-02-20","items":137,"orders":84,"hours":2.6314},{"name":"Abigail Lambert","date":"2026-02-20","items":62,"orders":24,"hours":0.6789},{"name":"Enrique Lopez","date":"2026-02-22","items":1192,"orders":718,"hours":6.8511},{"name":"Nickolas Antoninetti","date":"2026-02-22","items":591,"orders":222,"hours":6.0761},{"name":"Ekaterina Nikolaeva","date":"2026-02-22","items":85,"orders":27,"hours":0.8461},{"name":"Nick Bakin","date":"2026-02-22","items":44,"orders":14,"hours":0.3425},{"name":"Nickolas Antoninetti","date":"2026-02-23","items":833,"orders":356,"hours":6.3411},{"name":"Enrique Lopez","date":"2026-02-23","items":712,"orders":244,"hours":4.9175},{"name":"Mayra Mendoza","date":"2026-02-23","items":619,"orders":253,"hours":5.5956},{"name":"Carlvin Edwards Jr","date":"2026-02-23","items":327,"orders":101,"hours":4.9514},{"name":"Sergio Lobatos","date":"2026-02-23","items":241,"orders":139,"hours":3.6997},{"name":"Fernando Lopez-Carbajal","date":"2026-02-23","items":191,"orders":59,"hours":1.8975},{"name":"Naceem Bright","date":"2026-02-23","items":191,"orders":103,"hours":2.2044},{"name":"Nick Bakin","date":"2026-02-23","items":120,"orders":54,"hours":1.0211},{"name":"Momtchil Borissov","date":"2026-02-23","items":91,"orders":59,"hours":0.2767},{"name":"Despina Southas","date":"2026-02-23","items":58,"orders":52,"hours":0}];
+
+// ── CSV ──
+function parseCSV(text) {
+  const lines = text.replace(/\r/g,'').split('\n').filter(l=>l.trim());
+  const headers = csvLine(lines[0]);
+  return lines.slice(1).map(line => {
+    const vals = csvLine(line), obj = {};
+    headers.forEach((h,i) => obj[h.trim().replace(/^"|"$/g,'')] = (vals[i]||'').replace(/^"|"$/g,''));
+    return obj;
+  });
+}
+function csvLine(line) {
+  const r=[]; let c='',q=false;
+  for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){q=!q;continue;}if(ch===','&&!q){r.push(c);c='';continue;}c+=ch;}
+  r.push(c);return r;
+}
+function parseHrs(s){if(!s)return 0;const p=s.trim().split(':');return p.length===3?parseInt(p[0])+parseInt(p[1])/60+parseInt(p[2])/3600:0;}
+
+// ── Upload ──
+let wfhData=null,pickersData=null;
+document.getElementById('wfhFile').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=ev=>{wfhData=parseCSV(ev.target.result);document.getElementById('wfhBtn').classList.add('loaded');tryBuild();};
+  r.readAsText(f);
+});
+document.getElementById('pickersFile').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=ev=>{pickersData=parseCSV(ev.target.result);document.getElementById('pickersBtn').classList.add('loaded');tryBuild();};
+  r.readAsText(f);
+});
+function tryBuild(){
+  if(!wfhData||!pickersData)return;
+  const pe=wfhData.filter(r=>r['Job Name']==='Picking'),hm={};
+  pe.forEach(r=>{const k=r['Employee Name']+'|'+r['Start Date'];hm[k]=(hm[k]||0)+parseHrs(r['Total Hours']);});
+  render(pickersData.map(r=>({name:r['user_name'],date:r['date'],items:parseInt(r['items_picked'])||0,orders:parseInt(r['orders_picked'])||0,hours:hm[r['user_name']+'|'+r['date']]||0})));
+}
+
+// ── Render ──
+function render(data){
+  data.forEach(r=>{r.iph=r.hours>0?r.items/r.hours:0;r.oph=r.hours>0?r.orders/r.hours:0;});
+  const dates=[...new Set(data.map(r=>r.date))].sort();
+  document.getElementById('dateRange').textContent=dates[0]+' → '+dates[dates.length-1];
+
+  const ti=data.reduce((s,r)=>s+r.items,0);
+  const to=data.reduce((s,r)=>s+r.orders,0);
+  const th=data.reduce((s,r)=>s+r.hours,0);
+  const ai=th>0?ti/th:0;
+  const up=new Set(data.map(r=>r.name)).size;
+
+  document.getElementById('summaryCards').innerHTML=
+    card('Items Picked',ti.toLocaleString(),dates.length+' days',false)+
+    card('Orders',to.toLocaleString(),'',false)+
+    card('Pick Hours',th.toFixed(1),'WFH logged',false)+
+    card('Avg Items/Hr',ai.toFixed(0),'all pickers',true)+
+    card('Pickers',up,'unique',false);
+
+  window._d=data;window._dt=dates;
+  renderDaily();renderPicker();renderDetail();
+}
+
+function card(label,value,sub,accent){
+  return '<div class="card'+(accent?' accent':'')+'"><div class="label">'+label+'</div><div class="value">'+value+'</div>'+(sub?'<div class="sub">'+sub+'</div>':'')+'</div>';
+}
+
+// Efficiency helpers
+function effTag(iph){
+  if(iph>=150)return{c:'high',l:'HIGH'};
+  if(iph>=80)return{c:'mid',l:'MED'};
+  return{c:'low',l:'LOW'};
+}
+function effCell(iph,max){
+  const pct=Math.min(100,(iph/max)*100),t=effTag(iph);
+  return '<div class="eff-cell"><span class="iph-value">'+iph.toFixed(0)+'</span><div class="bar-track"><div class="bar-fill fill-'+t.c+'" style="width:'+pct+'%"></div></div><span class="tag tag-'+t.c+'">'+t.l+'</span></div>';
+}
+
+const DN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function dow(d){return DN[new Date(d+'T12:00:00').getDay()];}
+
+function renderDaily(){
+  const data=window._d,dates=window._dt;
+  const daily=dates.map(d=>{
+    const rows=data.filter(r=>r.date===d);
+    const it=rows.reduce((s,r)=>s+r.items,0),or=rows.reduce((s,r)=>s+r.orders,0),hr=rows.reduce((s,r)=>s+r.hours,0);
+    return{date:d,items:it,orders:or,hours:hr,iph:hr>0?it/hr:0,oph:hr>0?or/hr:0,n:rows.length};
+  });
+  const mx=Math.max(...daily.map(d=>d.iph),1);
+  const t={i:daily.reduce((s,d)=>s+d.items,0),o:daily.reduce((s,d)=>s+d.orders,0),h:daily.reduce((s,d)=>s+d.hours,0)};
+  t.iph=t.h>0?t.i/t.h:0;t.oph=t.h>0?t.o/t.h:0;
+
+  let h='<div class="table-header"><h3>Daily Summary</h3><span class="count">'+dates.length+' days</span></div><div class="table-scroll"><table><thead><tr><th>Date</th><th>Day</th><th>Pickers</th><th>Items</th><th>Orders</th><th>Pick Hrs</th><th>Orders/Hr</th><th>Items/Hr + Efficiency</th></tr></thead><tbody>';
+  daily.forEach(d=>{
+    h+='<tr><td class="date-cell">'+d.date+'</td><td class="day-cell">'+dow(d.date)+'</td><td>'+d.n+'</td><td>'+d.items.toLocaleString()+'</td><td>'+d.orders.toLocaleString()+'</td><td>'+d.hours.toFixed(1)+'</td><td>'+d.oph.toFixed(0)+'</td><td>'+effCell(d.iph,mx)+'</td></tr>';
+  });
+  h+='<tr class="totals-row"><td class="name-cell" colspan="2">TOTALS / AVG</td><td>—</td><td>'+t.i.toLocaleString()+'</td><td>'+t.o.toLocaleString()+'</td><td>'+t.h.toFixed(1)+'</td><td>'+t.oph.toFixed(0)+'</td><td>'+effCell(t.iph,mx)+'</td></tr></tbody></table></div>';
+  document.getElementById('dailyView').innerHTML=h;
+}
+
+function renderPicker(){
+  const data=window._d,names=[...new Set(data.map(r=>r.name))];
+  let stats=names.map(n=>{
+    const rows=data.filter(r=>r.name===n);
+    const it=rows.reduce((s,r)=>s+r.items,0),or=rows.reduce((s,r)=>s+r.orders,0),hr=rows.reduce((s,r)=>s+r.hours,0);
+    return{name:n,items:it,orders:or,hours:hr,iph:hr>0?it/hr:0,oph:hr>0?or/hr:0,days:rows.length};
+  });
+  stats.sort((a,b)=>b.iph-a.iph);
+  const mx=Math.max(...stats.map(p=>p.iph),1);
+  const t={i:stats.reduce((s,p)=>s+p.items,0),o:stats.reduce((s,p)=>s+p.orders,0),h:stats.reduce((s,p)=>s+p.hours,0)};
+  t.iph=t.h>0?t.i/t.h:0;
+
+  let h='<div class="table-header"><h3>Picker Rankings</h3><span class="count">'+stats.length+' pickers</span></div><div class="table-scroll"><table><thead><tr><th>#</th><th>Picker</th><th>Days</th><th>Items</th><th>Orders</th><th>Pick Hrs</th><th>Orders/Hr</th><th>Items/Hr + Efficiency</th></tr></thead><tbody>';
+  stats.forEach((p,i)=>{
+    h+='<tr><td class="rank-cell">'+(i+1)+'</td><td class="name-cell">'+p.name+'</td><td>'+p.days+'</td><td>'+p.items.toLocaleString()+'</td><td>'+p.orders.toLocaleString()+'</td><td>'+p.hours.toFixed(1)+'</td><td>'+p.oph.toFixed(0)+'</td><td>'+effCell(p.iph,mx)+'</td></tr>';
+  });
+  h+='<tr class="totals-row"><td></td><td class="name-cell">TOTALS / AVG</td><td>—</td><td>'+t.i.toLocaleString()+'</td><td>'+t.o.toLocaleString()+'</td><td>'+t.h.toFixed(1)+'</td><td>—</td><td>'+effCell(t.iph,mx)+'</td></tr></tbody></table></div>';
+  document.getElementById('pickerView').innerHTML=h;
+}
+
+function renderDetail(){
+  const data=[...window._d];
+  data.sort((a,b)=>a.date.localeCompare(b.date)||b.iph-a.iph);
+  const mx=Math.max(...data.filter(r=>r.hours>0).map(r=>r.iph),1);
+
+  let h='<div class="table-header"><h3>All Entries</h3><span class="count">'+data.length+' rows</span></div><div class="table-scroll"><table><thead><tr><th>Date</th><th>Day</th><th>Picker</th><th>Items</th><th>Orders</th><th>Pick Hrs</th><th>Orders/Hr</th><th>Items/Hr + Efficiency</th></tr></thead><tbody>';
+  data.forEach(r=>{
+    const ok=r.hours>0;
+    h+='<tr><td class="date-cell">'+r.date+'</td><td class="day-cell">'+dow(r.date)+'</td><td class="name-cell">'+r.name+'</td><td>'+r.items.toLocaleString()+'</td><td>'+r.orders.toLocaleString()+'</td><td>'+(ok?r.hours.toFixed(2):'<span class="no-data">no hrs</span>')+'</td><td>'+(ok?r.oph.toFixed(0):'—')+'</td><td>'+(ok?effCell(r.iph,mx):'<span class="muted" style="font-size:11px">no WFH data</span>')+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  document.getElementById('detailView').innerHTML=h;
+}
+
+function switchTab(btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  const v=btn.dataset.view;
+  document.getElementById('dailyView').style.display=v==='daily'?'':'none';
+  document.getElementById('pickerView').style.display=v==='picker'?'':'none';
+  document.getElementById('detailView').style.display=v==='detail'?'':'none';
+}
+
+render(PRELOADED);
+</script>
+</body>
+</html>
