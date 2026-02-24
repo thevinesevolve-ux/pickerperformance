@@ -188,6 +188,19 @@
 
   .upload-slot.loaded .check { display: block; }
 
+  .source-link {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text3);
+    text-decoration: none;
+    text-align: right;
+    padding: 4px 18px 8px 0;
+    transition: color 0.15s;
+  }
+
+  .source-link:hover { color: var(--lime); }
+
   .upload-status {
     margin-top: 24px;
     font-size: 12px;
@@ -327,6 +340,21 @@
   tr:last-child td { border-bottom: none; }
   tr:hover td { background: rgba(208,232,71,0.03); }
 
+  tr.unqualified td { opacity: 0.35; }
+  tr.unqualified:hover td { opacity: 0.5; }
+
+  .threshold-divider td {
+    padding: 6px 16px;
+    background: var(--surface2) !important;
+    border-top: 1px dashed var(--border2);
+    border-bottom: 1px dashed var(--border2);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text3);
+    letter-spacing: 0.5px;
+  }
+
   .eff-cell { display: flex; align-items: center; gap: 10px; }
 
   .bar-track {
@@ -397,6 +425,7 @@
         <div class="check">✓</div>
         <input type="file" id="wfhFile" accept=".csv">
       </label>
+      <a href="https://shipping.shiphero.com/workforcehero/reports/" target="_blank" class="source-link" onclick="event.stopPropagation()">↗ Open WorkForce Hero Reports</a>
 
       <label class="upload-slot" id="pickersSlot">
         <div class="icon">📋</div>
@@ -408,6 +437,7 @@
         <div class="check">✓</div>
         <input type="file" id="pickersFile" accept=".csv">
       </label>
+      <a href="https://shipping.shiphero.com/hero-board/" target="_blank" class="source-link" onclick="event.stopPropagation()">↗ Open ShipHero Hero Board</a>
     </div>
 
     <div class="upload-status" id="uploadStatus">Upload both files to continue</div>
@@ -589,22 +619,34 @@ function renderDaily(){
 }
 
 function renderPicker(){
+  const MIN_HOURS = 2;
   const data=window._d,names=[...new Set(data.map(r=>r.name))];
   let stats=names.map(n=>{
     const rows=data.filter(r=>r.name===n);
     const it=rows.reduce((s,r)=>s+r.items,0),or=rows.reduce((s,r)=>s+r.orders,0),hr=rows.reduce((s,r)=>s+r.hours,0);
     return{name:n,items:it,orders:or,hours:hr,iph:hr>0?it/hr:0,oph:hr>0?or/hr:0,days:rows.length};
   });
-  stats.sort((a,b)=>b.iph-a.iph);
-  const mx=Math.max(...stats.map(p=>p.iph),1);
-  const t={i:stats.reduce((s,p)=>s+p.items,0),o:stats.reduce((s,p)=>s+p.orders,0),h:stats.reduce((s,p)=>s+p.hours,0)};
+
+  const qualified = stats.filter(p=>p.hours>=MIN_HOURS).sort((a,b)=>b.iph-a.iph);
+  const unqualified = stats.filter(p=>p.hours<MIN_HOURS).sort((a,b)=>b.iph-a.iph);
+  const mx=Math.max(...qualified.map(p=>p.iph),1);
+  const t={i:qualified.reduce((s,p)=>s+p.items,0),o:qualified.reduce((s,p)=>s+p.orders,0),h:qualified.reduce((s,p)=>s+p.hours,0)};
   t.iph=t.h>0?t.i/t.h:0;
 
-  let h='<div class="table-header"><h3>Picker Rankings</h3><span class="count">'+stats.length+' pickers</span></div><div class="table-scroll"><table><thead><tr><th>#</th><th>Picker</th><th>Days</th><th>Items</th><th>Orders</th><th>Pick Hrs</th><th>Orders/Hr</th><th>Items/Hr + Efficiency</th></tr></thead><tbody>';
-  stats.forEach((p,i)=>{
+  let h='<div class="table-header"><h3>Picker Rankings</h3><span class="count">'+qualified.length+' qualified · '+MIN_HOURS+'hr min</span></div><div class="table-scroll"><table><thead><tr><th>#</th><th>Picker</th><th>Days</th><th>Items</th><th>Orders</th><th>Pick Hrs</th><th>Orders/Hr</th><th>Items/Hr + Efficiency</th></tr></thead><tbody>';
+  qualified.forEach((p,i)=>{
     h+='<tr><td class="rank-cell">'+(i+1)+'</td><td class="name-cell">'+p.name+'</td><td>'+p.days+'</td><td>'+p.items.toLocaleString()+'</td><td>'+p.orders.toLocaleString()+'</td><td>'+p.hours.toFixed(1)+'</td><td>'+p.oph.toFixed(0)+'</td><td>'+effCell(p.iph,mx)+'</td></tr>';
   });
-  h+='<tr class="totals-row"><td></td><td class="name-cell">TOTALS / AVG</td><td>—</td><td>'+t.i.toLocaleString()+'</td><td>'+t.o.toLocaleString()+'</td><td>'+t.h.toFixed(1)+'</td><td>—</td><td>'+effCell(t.iph,mx)+'</td></tr></tbody></table></div>';
+  h+='<tr class="totals-row"><td></td><td class="name-cell">TOTALS / AVG</td><td>—</td><td>'+t.i.toLocaleString()+'</td><td>'+t.o.toLocaleString()+'</td><td>'+t.h.toFixed(1)+'</td><td>—</td><td>'+effCell(t.iph,mx)+'</td></tr>';
+
+  if(unqualified.length>0){
+    h+='<tr class="threshold-divider"><td colspan="8">BELOW '+MIN_HOURS+'HR THRESHOLD — not ranked</td></tr>';
+    unqualified.forEach(p=>{
+      h+='<tr class="unqualified"><td class="rank-cell">—</td><td class="name-cell">'+p.name+'</td><td>'+p.days+'</td><td>'+p.items.toLocaleString()+'</td><td>'+p.orders.toLocaleString()+'</td><td>'+p.hours.toFixed(1)+'</td><td>'+(p.hours>0?p.oph.toFixed(0):'—')+'</td><td>'+(p.hours>0?effCell(p.iph,mx):'<span class="muted">—</span>')+'</td></tr>';
+    });
+  }
+
+  h+='</tbody></table></div>';
   document.getElementById('pickerView').innerHTML=h;
 }
 
