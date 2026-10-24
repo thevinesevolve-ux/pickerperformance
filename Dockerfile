@@ -1,4 +1,4 @@
-FROM node:22-alpine
+FROM node:25-alpine
 WORKDIR /app
 # The app uses only built-in modules; drop the bundled package managers.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
